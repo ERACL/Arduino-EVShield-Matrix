@@ -9,21 +9,19 @@ EVs_Matrix::EVs_Matrix(uint8_t i2c_address)
 {
 }
 
-void EVs_Matrix::get_batterie_state()
+int EVs_Matrix::get_battery_state()
 {
-  int etat=readByte(SH_ETAT);
-  if (etat==0) Serial.println("Système fonctionnelle");
-  else Serial.println("Problème batterie, la mettre à charger");
+  return(readByte(SH_ETAT)/2);
 }
 
-int EVs_Matrix::get_batterie_level()
+int EVs_Matrix::get_battery_level()
 {
-  return readByte(SH_BATTERIE);
+  return readByte(SH_BATTERIE)*40;
 }
 
-long EVs_Matrix::get_moteur_position(SH_Matrix_Motor moteur)
+long EVs_Matrix::get_motor_position(SH_Matrix_Motor motor)
 {
-  long mot = readLong(moteur);
+  long mot = readLong(motor);
   byte liste[8];
   for (int i=4;i<8;i++){
     liste[i]=mot;
@@ -41,7 +39,17 @@ long EVs_Matrix::get_moteur_position(SH_Matrix_Motor moteur)
   return mot;
 }
 
-void EVs_Matrix::set_moteur_target(SH_Matrix_Motor moteur, long position)
+void EVs_Matrix::set_timeout(int time)
+{
+  writeByte(SH_TIMEOUT,time);
+}
+
+void EVs_Matrix::start_flag()
+{
+  writeByte(STRT_FL,1);
+}
+
+void EVs_Matrix::set_motor_target(SH_Matrix_Motor motor, long position)
 {  
   long mot = position;
   byte liste[8];
@@ -58,12 +66,12 @@ void EVs_Matrix::set_moteur_target(SH_Matrix_Motor moteur, long position)
     mot=mot*16;
     mot=mot+liste[i];
   }
-  writeLong(moteur+4, mot);
+  writeLong(motor+4, mot);
 }
 
-long EVs_Matrix::get_moteur_target(SH_Matrix_Motor moteur)
+long EVs_Matrix::get_motor_target(SH_Matrix_Motor motor)
 {
-  long mot = readLong(moteur+4);
+  long mot = readLong(motor+4);
   byte liste[8];
   for (int i=4;i<8;i++){
     liste[i]=mot;
@@ -81,23 +89,22 @@ long EVs_Matrix::get_moteur_target(SH_Matrix_Motor moteur)
   return mot;
 }
 
-void EVs_Matrix::set_moteur_speed(SH_Matrix_Motor moteur, int vitesse)
+void EVs_Matrix::set_motor_speed(SH_Matrix_Motor motor, int vitesse)
 {
-  int decalage = 8;
-  if (vitesse <= 100 and vitesse >= -100)  writeByte(moteur+decalage,vitesse);
-  else  Serial.println("La vitesse doit être comprise entre 0 et 100");
+  if (vitesse <= 100 and vitesse >= -100)  writeByte(motor+8,vitesse);
+  else  vitesse = 0;
 }
 
-int EVs_Matrix::get_moteur_speed(SH_Matrix_Motor moteur)
+int EVs_Matrix::get_motor_speed(SH_Matrix_Motor motor)
 {
-  return readByte(moteur+8);
+  return readByte(motor+8);
 }
 
 
 //0 = M0, 1=M1, 2=M2, 3=M3, 4=reset, ...
-void EVs_Matrix::set_moteur_mode(SH_Matrix_Motor moteur, int mode)
+void EVs_Matrix::set_motor_mode(SH_Matrix_Motor motor, int mode)
 {
-  writeByte(moteur+9,mode);
+  writeByte(motor+9,mode);
   char bit[8];
   for (int i=0 ; i<8 ; i++){
     if (mode%2==1){
@@ -110,39 +117,17 @@ void EVs_Matrix::set_moteur_mode(SH_Matrix_Motor moteur, int mode)
     }
   } 
     if (bit[2]==1){
-    Serial.print("reset du moteur :");
-    Serial.println(moteur);
+    Serial.println("reset motor :");
     }
 }
 
-void EVs_Matrix::get_moteur_mode(SH_Matrix_Motor moteur)
+int EVs_Matrix::get_motor_mode(SH_Matrix_Motor motor)
 {
-  int mode = readByte(moteur+9);
-  char bit[8];
-  for (int i=0 ; i<8 ; i++){
-    if (mode%2==1){
-      bit[i]=1;
-      mode=(mode-1)/2;
-    }  
-    else{
-    bit[i]=0;
-    mode=mode/2;
-    }                  
-  }
-  if (bit[7]==1)  Serial.println("position et target différents");
-  else            Serial.println("position = target");
-  if (bit[4]==1)  Serial.println("marche arrière");
-  else            Serial.println("marche avant");
-  if (bit[3]==1)  Serial.println("compteur en cours en attente du strat flag à 1");
-  else            Serial.println("pas de compteur : start flag = 1");
-  if (bit[1]==0){
-    if (bit[0]==0)  Serial.println("mode 0 : à l'arrêt le moteur est relaché");
-    else            Serial.println("mode 1 : à l'arrêt le moteur est bloqué");
-  }
-  else  {
-    if (bit[0]==0)  Serial.println("mode 2 : simplement contré par la vitesse");
-    else            Serial.println("mode 3 : la position du moteur va jusqu'au targer à la vitesse définie dans le registre vitesse") ;
-  }
+  return(readByte(motor+9));
 }
 
-
+bool EVs_Matrix::is_motor_busy(SH_Matrix_Motor motor)
+{
+  int mode = readByte(motor+9);
+  return(mode/128);
+}
